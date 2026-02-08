@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>GPS Accuracy Test Tool - AbsenKi</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+        #map { height: 400px; }
+        .reading { animation: fadeIn 0.3s; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+    </head>
+    <body class="bg-gray-100">
+        <div class="container mx-auto px-4 py-8 max-w-6xl">
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">🧪 GPS
+                    Accuracy Test Tool</h1>
+                <p class="text-gray-600 mb-4">Tool untuk testing dan monitoring
+                    akurasi GPS pada sistem absensi</p>
+
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Readings</div>
+                        <div class="text-2xl font-bold text-blue-600"
+                            id="readingCount">0</div>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Avg Accuracy</div>
+                        <div class="text-2xl font-bold text-green-600"
+                            id="avgAccuracy">-</div>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Best</div>
+                        <div class="text-2xl font-bold text-purple-600"
+                            id="bestAccuracy">-</div>
+                    </div>
+                    <div class="bg-orange-50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Worst</div>
+                        <div class="text-2xl font-bold text-orange-600"
+                            id="worstAccuracy">-</div>
+                    </div>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="flex flex-wrap gap-4 mb-6">
+                    <button onclick="getSingleReading()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                        📍 Get Single Reading
+                    </button>
+                    <button onclick="startContinuousReading()"
+                        id="continuousBtn"
+                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                        🔄 Start Continuous (5s)
+                    </button>
+                    <button onclick="getMultipleReadings()"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                        📊 Get 10 Readings
+                    </button>
+                    <button onclick="clearReadings()"
+                        class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                        🗑️ Clear All
+                    </button>
+                </div>
+
+                <!-- Settings -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <h3 class="font-semibold mb-3">⚙️ GPS Settings</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" id="highAccuracy" checked
+                                class="w-5 h-5">
+                            <span>Enable High Accuracy (GPS)</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <span>Timeout:</span>
+                            <select id="timeout"
+                                class="border rounded px-2 py-1">
+                                <option value="5000">5s</option>
+                                <option value="10000" selected>10s</option>
+                                <option value="15000">15s</option>
+                                <option value="30000">30s</option>
+                            </select>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <span>Max Age:</span>
+                            <select id="maxAge"
+                                class="border rounded px-2 py-1">
+                                <option value="0" selected>0 (Fresh
+                                    only)</option>
+                                <option value="5000">5s</option>
+                                <option value="30000">30s</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map View -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h2 class="text-xl font-bold mb-4">🗺️ Location Map</h2>
+                <div id="map" class="rounded-lg border-2 border-gray-200"></div>
+                <div class="mt-4 text-sm text-gray-600">
+                    <strong>Legend:</strong>
+                    <span
+                        class="inline-block w-3 h-3 bg-blue-500 rounded-full ml-2"></span>
+                    Latest Reading
+                    <span
+                        class="inline-block w-3 h-3 bg-green-500 rounded-full ml-2"></span>
+                    Best Accuracy
+                    <span
+                        class="inline-block w-3 h-3 bg-red-500 rounded-full ml-2"></span>
+                    Worst Accuracy
+                </div>
+            </div>
+
+            <!-- Current Reading -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6"
+                id="currentReading" style="display: none;">
+                <h2 class="text-xl font-bold mb-4">📍 Current Reading</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <div class="text-sm text-gray-600">Latitude</div>
+                        <div class="font-mono text-lg" id="currentLat">-</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Longitude</div>
+                        <div class="font-mono text-lg" id="currentLng">-</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Accuracy</div>
+                        <div class="font-mono text-lg" id="currentAcc">-</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Quality</div>
+                        <div class="font-mono text-lg"
+                            id="currentQuality">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Readings Table -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4">📋 All Readings</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">#</th>
+                                <th class="px-4 py-2 text-left">Time</th>
+                                <th class="px-4 py-2 text-left">Latitude</th>
+                                <th class="px-4 py-2 text-left">Longitude</th>
+                                <th class="px-4 py-2 text-left">Accuracy
+                                    (m)</th>
+                                <th class="px-4 py-2 text-left">Quality</th>
+                                <th class="px-4 py-2 text-left">Altitude</th>
+                                <th class="px-4 py-2 text-left">Speed</th>
+                            </tr>
+                        </thead>
+                        <tbody id="readingsTable"
+                            class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="8"
+                                    class="px-4 py-8 text-center text-gray-400">
+                                    No readings yet. Click "Get Single Reading"
+                                    to start.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Analysis -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mt-6">
+                <h2 class="text-xl font-bold mb-4">📊 Analysis &
+                    Recommendations</h2>
+                <div id="analysis" class="space-y-4 text-gray-600">
+                    <p>Run some readings to see analysis and
+                        recommendations...</p>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        // Global state
+        let readings = [];
+        let map = null;
+        let markers = [];
+        let continuousInterval = null;
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([-6.2088, 106.8456], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // Get GPS options from UI
+        function getGPSOptions() {
+            return {
+                enableHighAccuracy: document.getElementById('highAccuracy').checked,
+                timeout: parseInt(document.getElementById('timeout').value),
+                maximumAge: parseInt(document.getElementById('maxAge').value)
+            };
+        }
+
+        // Quality rating
+        function getQualityRating(accuracy) {
+            if (accuracy <= 10) return { text: 'Excellent ✅', color: 'text-green-600', class: 'bg-green-50' };
+            if (accuracy <= 20) return { text: 'Good ✅', color: 'text-green-600', class: 'bg-green-50' };
+            if (accuracy <= 50) return { text: 'Fair ⚠️', color: 'text-yellow-600', class: 'bg-yellow-50' };
+            if (accuracy <= 100) return { text: 'Poor ⚠️', color: 'text-orange-600', class: 'bg-orange-50' };
+            return { text: 'Very Poor ❌', color: 'text-red-600', class: 'bg-red-50' };
+        }
+
+        // Get single reading
+        function getSingleReading() {
+            const options = getGPSOptions();
+            const startTime = Date.now();
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const duration = Date.now() - startTime;
+                    addReading(position, duration);
+                },
+                (error) => {
+                    alert('GPS Error: ' + error.message);
+                    console.error('GPS Error:', error);
+                },
+                options
+            );
+        }
+
+        // Start continuous reading
+        function startContinuousReading() {
+            const btn = document.getElementById('continuousBtn');
+
+            if (continuousInterval) {
+                // Stop
+                clearInterval(continuousInterval);
+                continuousInterval = null;
+                btn.textContent = '🔄 Start Continuous (5s)';
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+            } else {
+                // Start
+                btn.textContent = '⏹️ Stop Continuous';
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+
+                // Get first reading immediately
+                getSingleReading();
+
+                // Then continue every 5 seconds
+                continuousInterval = setInterval(() => {
+                    getSingleReading();
+                }, 5000);
+            }
+        }
+
+        // Get multiple readings
+        async function getMultipleReadings() {
+            for (let i = 0; i < 10; i++) {
+                getSingleReading();
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+
+        // Add reading to list
+        function addReading(position, duration) {
+            const reading = {
+                timestamp: new Date(),
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                altitude: position.coords.altitude,
+                speed: position.coords.speed,
+                heading: position.coords.heading,
+                duration: duration
+            };
+
+            readings.unshift(reading); // Add to beginning
+            updateUI();
+            updateMap();
+            updateAnalysis();
+        }
+
+        // Update UI
+        function updateUI() {
+            // Update stats
+            document.getElementById('readingCount').textContent = readings.length;
+
+            if (readings.length > 0) {
+                const accuracies = readings.map(r => r.accuracy);
+                const avg = accuracies.reduce((a, b) => a + b) / accuracies.length;
+                const best = Math.min(...accuracies);
+                const worst = Math.max(...accuracies);
+
+                document.getElementById('avgAccuracy').textContent = `±${Math.round(avg)}m`;
+                document.getElementById('bestAccuracy').textContent = `±${Math.round(best)}m`;
+                document.getElementById('worstAccuracy').textContent = `±${Math.round(worst)}m`;
+
+                // Update current reading
+                const latest = readings[0];
+                const quality = getQualityRating(latest.accuracy);
+
+                document.getElementById('currentReading').style.display = 'block';
+                document.getElementById('currentLat').textContent = latest.lat.toFixed(6);
+                document.getElementById('currentLng').textContent = latest.lng.toFixed(6);
+                document.getElementById('currentAcc').textContent = `±${Math.round(latest.accuracy)}m`;
+                document.getElementById('currentQuality').textContent = quality.text;
+                document.getElementById('currentQuality').className = `font-mono text-lg ${quality.color}`;
+            }
+
+            // Update table
+            const tbody = document.getElementById('readingsTable');
+            tbody.innerHTML = readings.map((reading, index) => {
+                const quality = getQualityRating(reading.accuracy);
+                return `
+                    <tr class="reading hover:bg-gray-50 ${quality.class}">
+                        <td class="px-4 py-3 font-semibold">${readings.length - index}</td>
+                        <td class="px-4 py-3 text-xs">${reading.timestamp.toLocaleTimeString()}</td>
+                        <td class="px-4 py-3 font-mono text-xs">${reading.lat.toFixed(6)}</td>
+                        <td class="px-4 py-3 font-mono text-xs">${reading.lng.toFixed(6)}</td>
+                        <td class="px-4 py-3 font-semibold ${quality.color}">±${Math.round(reading.accuracy)}m</td>
+                        <td class="px-4 py-3 ${quality.color}">${quality.text}</td>
+                        <td class="px-4 py-3 text-xs">${reading.altitude ? Math.round(reading.altitude) + 'm' : '-'}</td>
+                        <td class="px-4 py-3 text-xs">${reading.speed ? (reading.speed * 3.6).toFixed(1) + ' km/h' : '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Update map
+        function updateMap() {
+            // Clear existing markers
+            markers.forEach(marker => marker.remove());
+            markers = [];
+
+            if (readings.length === 0) return;
+
+            // Add all readings as circles
+            const accuracies = readings.map(r => r.accuracy);
+            const best = Math.min(...accuracies);
+            const worst = Math.max(...accuracies);
+
+            readings.forEach((reading, index) => {
+                let color = '#3b82f6'; // blue
+                if (reading.accuracy === best) color = '#10b981'; // green
+                if (reading.accuracy === worst) color = '#ef4444'; // red
+
+                // Marker
+                const marker = L.circleMarker([reading.lat, reading.lng], {
+                    radius: index === 0 ? 8 : 5,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: index === 0 ? 0.8 : 0.3,
+                    weight: 2
+                }).addTo(map);
+
+                marker.bindPopup(`
+                    <strong>Reading #${readings.length - index}</strong><br>
+                    Accuracy: ±${Math.round(reading.accuracy)}m<br>
+                    Time: ${reading.timestamp.toLocaleTimeString()}<br>
+                    Duration: ${reading.duration}ms
+                `);
+
+                markers.push(marker);
+
+                // Accuracy circle for latest reading
+                if (index === 0) {
+                    const circle = L.circle([reading.lat, reading.lng], {
+                        radius: reading.accuracy,
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.1,
+                        weight: 1
+                    }).addTo(map);
+                    markers.push(circle);
+                }
+            });
+
+            // Center on latest reading
+            const latest = readings[0];
+            map.setView([latest.lat, latest.lng], 16);
+        }
+
+        // Update analysis
+        function updateAnalysis() {
+            if (readings.length === 0) return;
+
+            const accuracies = readings.map(r => r.accuracy);
+            const avg = accuracies.reduce((a, b) => a + b) / accuracies.length;
+            const best = Math.min(...accuracies);
+            const worst = Math.max(...accuracies);
+            const variance = accuracies.map(a => Math.pow(a - avg, 2)).reduce((a, b) => a + b) / accuracies.length;
+            const stdDev = Math.sqrt(variance);
+
+            let analysis = `
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                    <h3 class="font-semibold mb-2">📊 Statistical Summary</h3>
+                    <ul class="space-y-1 text-sm">
+                        <li><strong>Total Readings:</strong> ${readings.length}</li>
+                        <li><strong>Average Accuracy:</strong> ±${Math.round(avg)}m</li>
+                        <li><strong>Best Accuracy:</strong> ±${Math.round(best)}m</li>
+                        <li><strong>Worst Accuracy:</strong> ±${Math.round(worst)}m</li>
+                        <li><strong>Standard Deviation:</strong> ±${Math.round(stdDev)}m</li>
+                        <li><strong>Range:</strong> ${Math.round(worst - best)}m</li>
+                    </ul>
+                </div>
+            `;
+
+            // Recommendations
+            if (avg <= 15) {
+                analysis += `
+                    <div class="bg-green-50 border-l-4 border-green-500 p-4">
+                        <h3 class="font-semibold mb-2">✅ Excellent GPS Performance</h3>
+                        <p class="text-sm">GPS accuracy is excellent (±${Math.round(avg)}m average). Recommended geofence radius: <strong>30-50 meters</strong></p>
+                    </div>
+                `;
+            } else if (avg <= 30) {
+                analysis += `
+                    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                        <h3 class="font-semibold mb-2">⚠️ Good GPS Performance</h3>
+                        <p class="text-sm">GPS accuracy is good (±${Math.round(avg)}m average). Recommended geofence radius: <strong>50-80 meters</strong></p>
+                    </div>
+                `;
+            } else if (avg <= 50) {
+                analysis += `
+                    <div class="bg-orange-50 border-l-4 border-orange-500 p-4">
+                        <h3 class="font-semibold mb-2">⚠️ Fair GPS Performance</h3>
+                        <p class="text-sm">GPS accuracy is fair (±${Math.round(avg)}m average). Consider:</p>
+                        <ul class="text-sm list-disc ml-5 mt-2">
+                            <li>Move closer to windows (for indoor)</li>
+                            <li>Go to more open area (for outdoor)</li>
+                            <li>Recommended geofence radius: <strong>80-120 meters</strong></li>
+                        </ul>
+                    </div>
+                `;
+            } else {
+                analysis += `
+                    <div class="bg-red-50 border-l-4 border-red-500 p-4">
+                        <h3 class="font-semibold mb-2">❌ Poor GPS Performance</h3>
+                        <p class="text-sm">GPS accuracy is poor (±${Math.round(avg)}m average). Recommendations:</p>
+                        <ul class="text-sm list-disc ml-5 mt-2">
+                            <li>Ensure GPS is enabled on device</li>
+                            <li>Move to outdoor or near window</li>
+                            <li>Check device GPS hardware</li>
+                            <li>Minimum geofence radius: <strong>120-200 meters</strong></li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            // Consistency check
+            if (stdDev > avg * 0.5) {
+                analysis += `
+                    <div class="bg-orange-50 border-l-4 border-orange-500 p-4">
+                        <h3 class="font-semibold mb-2">⚠️ High Variance Detected</h3>
+                        <p class="text-sm">GPS readings are inconsistent (std dev: ±${Math.round(stdDev)}m). This suggests:</p>
+                        <ul class="text-sm list-disc ml-5 mt-2">
+                            <li>GPS is still acquiring satellites</li>
+                            <li>Environmental interference (buildings, trees)</li>
+                            <li>Device is moving</li>
+                            <li>Recommendation: Take more readings or use averaging</li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            document.getElementById('analysis').innerHTML = analysis;
+        }
+
+        // Clear all readings
+        function clearReadings() {
+            if (confirm('Clear all readings?')) {
+                readings = [];
+                markers.forEach(marker => marker.remove());
+                markers = [];
+
+                document.getElementById('readingCount').textContent = '0';
+                document.getElementById('avgAccuracy').textContent = '-';
+                document.getElementById('bestAccuracy').textContent = '-';
+                document.getElementById('worstAccuracy').textContent = '-';
+                document.getElementById('currentReading').style.display = 'none';
+
+                document.getElementById('readingsTable').innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+                            No readings yet. Click "Get Single Reading" to start.
+                        </td>
+                    </tr>
+                `;
+
+                document.getElementById('analysis').innerHTML = '<p>Run some readings to see analysis and recommendations...</p>';
+            }
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            console.log('🧪 GPS Accuracy Test Tool initialized');
+            console.log('Ready to test GPS accuracy!');
+        });
+
+        // Export data function
+        function exportData() {
+            const data = {
+                testDate: new Date().toISOString(),
+                totalReadings: readings.length,
+                settings: getGPSOptions(),
+                readings: readings,
+                statistics: {
+                    avgAccuracy: readings.reduce((a, b) => a + b.accuracy, 0) / readings.length,
+                    bestAccuracy: Math.min(...readings.map(r => r.accuracy)),
+                    worstAccuracy: Math.max(...readings.map(r => r.accuracy))
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `gps-test-${Date.now()}.json`;
+            a.click();
+        }
+    </script>
+    </body>
+</html>
