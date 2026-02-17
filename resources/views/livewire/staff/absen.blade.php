@@ -463,7 +463,8 @@
 
             // Draw label with name and score if available
             if (name && score) {
-                const displayScore = score >= 99.95 ? '100' : score.toFixed(1);
+                // Truncate ke 2 desimal tanpa pembulatan
+                const displayScore = (Math.floor(score * 100) / 100).toFixed(2);
                 const labelText = `${name} (${displayScore}%)`;
 
                 // Measure text width for dynamic label size
@@ -569,7 +570,8 @@
                 // Prepare label text
                 let labelText = label;
                 if (score) {
-                    const displayScore = score.toFixed(2);
+                    // Truncate ke 2 desimal tanpa pembulatan
+                    const displayScore = (Math.floor(score * 100) / 100).toFixed(2);
                     labelText += ` (${displayScore}%)`;
                 }
 

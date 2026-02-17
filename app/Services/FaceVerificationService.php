@@ -236,12 +236,15 @@ class FaceVerificationService
                 'face_count' => $faceCount,
             ]);
 
+            // Truncate (potong) ke 2 desimal tanpa pembulatan
+            $truncatedScore = floor($similarity * 100) / 100;
+
             return [
                 'ok' => true,
-                'score' => round($similarity, 2),
+                'score' => $truncatedScore,
                 'name' => $matchedUserName,
                 'face_id' => $matchedFaceId,
-                'message' => sprintf('Wajah cocok dengan confidence %s%%', number_format($similarity, 2, '.', '')),
+                'message' => sprintf('Wajah cocok dengan confidence %s%%', number_format($truncatedScore, 2, '.', '')),
                 'boundingBoxes' => $boundingBoxes,
                 'faceCount' => $faceCount,
             ];
